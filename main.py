@@ -1,4 +1,4 @@
-"""ORION - primera conexión a un modelo Nemotron servido por NVIDIA NIM."""
+"""ORION - conexión a Nemotron con respuesta estructurada validada."""
 
 from __future__ import annotations
 
@@ -8,20 +8,23 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 from openai import OpenAI
+from pydantic import ValidationError
+
+from schemas.orion_response import OrionResponse
 
 load_dotenv()
 
 DEFAULT_BASE_URL = "https://integrate.api.nvidia.com/v1"
 DEFAULT_MODEL = "nvidia/nemotron-3.5-lightning-30b-a3b"
 TEMPERATURE = 0.3
-MAX_TOKENS = 1000
+MAX_TOKENS = 2000
 
 BASE_URL = os.environ.get("NVIDIA_BASE_URL") or DEFAULT_BASE_URL
 MODEL = os.environ.get("NVIDIA_MODEL") or DEFAULT_MODEL
 
 BASE_DIR = Path(__file__).resolve().parent
 SYSTEM_PROMPT = (BASE_DIR / "prompts" / "system.txt").read_text().strip()
-USER_PROMPT = "ORION, ¿Cómo se usa una API REST?"
+USER_PROMPT = "ORION, explica el uso de un agente de IA"
 
 
 def main() -> int:
@@ -49,14 +52,26 @@ def main() -> int:
         ],
         temperature=TEMPERATURE,
         max_tokens=MAX_TOKENS,
+        extra_body={"guided_json": OrionResponse.model_json_schema()},
     )
 
-    content = (completion.choices[0].message.content or "")
-    if not content:
+    raw = completion.choices[0].message.content or ""
+    if not raw:
         print("ORION devolvió una respuesta vacía.", file=sys.stderr)
         return 1
 
-    print(f"\nORION: {content}")
+    print(f"\nRaw JSON:\n{raw}")
+
+    try:
+        data = OrionResponse.model_validate_json(raw)
+    except ValidationError as exc:
+        print(f"\nValidation failed:\n{exc}", file=sys.stderr)
+        return 1
+
+    print("\nORION (validado):")
+    print(f"  nivel:          {data.nivel}")
+    print(f"  palabras_clave: {', '.join(data.palabras_clave)}")
+    print(f"\nRespuesta:\n{data.respuesta}")
     return 0
 
 
