@@ -57,7 +57,8 @@ def ask_complete(client: OpenAI) -> int:
         print(f"Error en la llamada a la API: {exc}", file=sys.stderr)
         return 1
 
-    raw = (completion.choices[0].message.content or "").strip()
+    raw = completion.choices[0].message.content if completion.choices else ""
+    raw = (raw or "").strip()
     if not raw:
         print("Error: ORION devolvió una respuesta vacía.", file=sys.stderr)
         return 1
